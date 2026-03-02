@@ -4,6 +4,8 @@ using CounterStrikeSharp.API.Core.Attributes.Registration;
 using CounterStrikeSharp.API.Modules.Entities;
 using CounterStrikeSharp.API.Modules.Memory;
 using CounterStrikeSharp.API.Modules.Memory.DynamicFunctions;
+using CounterStrikeSharp.API.Modules.Timers;
+using Dapper;
 using Microsoft.Extensions.Logging;
 
 namespace WeaponPaints
@@ -124,12 +126,79 @@ namespace WeaponPaints
 		private void OnMapStart(string mapName)
 		{
 			if (Config.Additional is { KnifeEnabled: false, SkinEnabled: false, GloveEnabled: false }) return;
-			
+
 			if (Database != null)
 				WeaponSync = new WeaponSynchronization(Database, Config);
 
 			_fadeSeed = 0;
 			_nextItemId = MinimumCustomItemId;
+
+			AddTimer(3.0f, PollRefreshQueue, TimerFlags.REPEAT | TimerFlags.STOP_ON_MAPCHANGE);
+		}
+
+		private void PollRefreshQueue()
+		{
+			if (Database == null || WeaponSync == null) return;
+
+			_ = Task.Run(async () =>
+			{
+				try
+				{
+					await using var connection = await Database.GetConnectionAsync();
+
+					var rows = (await connection.QueryAsync<(int id, string steamid)>(
+						"SELECT `id`, `steamid` FROM `wp_refresh_queue` ORDER BY `id` ASC LIMIT 10"
+					)).ToList();
+
+					if (rows.Count == 0) return;
+
+					var ids = rows.Select(r => r.id).ToList();
+					await connection.ExecuteAsync(
+						"DELETE FROM `wp_refresh_queue` WHERE `id` IN @Ids",
+						new { Ids = ids }
+					);
+
+					var steamIds = rows.Select(r => r.steamid).Distinct().ToList();
+
+					Server.NextFrame(() =>
+					{
+						foreach (var steamId in steamIds)
+						{
+							var player = Players.FirstOrDefault(p =>
+								p is { IsValid: true, IsBot: false } && p.SteamID.ToString() == steamId);
+
+							if (player == null) continue;
+
+							var playerInfo = new PlayerInfo
+							{
+								UserId = player.UserId,
+								Slot = player.Slot,
+								Index = (int)player.Index,
+								SteamId = player.SteamID.ToString(),
+								Name = player.PlayerName,
+								IpAddress = player.IpAddress?.Split(":")[0]
+							};
+
+							if (WeaponSync != null)
+							{
+								_ = Task.Run(async () => await WeaponSync.GetPlayerData(playerInfo));
+
+								GivePlayerGloves(player);
+								RefreshWeapons(player);
+								GivePlayerAgent(player);
+								GivePlayerMusicKit(player);
+								AddTimer(0.15f, () => GivePlayerPin(player));
+							}
+
+							Utility.Log($"Refreshed skins for {player.PlayerName} ({steamId}) via queue");
+						}
+					});
+				}
+				catch (Exception ex)
+				{
+					Utility.Log($"Error polling refresh queue: {ex.Message}");
+				}
+			});
 		}
 
 		private HookResult OnPlayerSpawn(EventPlayerSpawn @event, GameEventInfo info)

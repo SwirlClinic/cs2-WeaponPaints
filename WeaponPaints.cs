@@ -14,6 +14,7 @@ namespace WeaponPaints;
 public partial class WeaponPaints : BasePlugin, IPluginConfig<WeaponPaintsConfig>
 {
 	internal static WeaponPaints Instance { get; private set; } = new();
+	private RefreshListener? _refreshListener;
 
 	public WeaponPaintsConfig Config { get; set; } = new();
     private static WeaponPaintsConfig _config { get; set; } = new();
@@ -73,6 +74,17 @@ public partial class WeaponPaints : BasePlugin, IPluginConfig<WeaponPaintsConfig
 		Utility.LoadPinsFromFile(ModuleDirectory + $"/data/collectibles_{_config.SkinsLanguage}.json", Logger);
 
 		RegisterListeners();
+
+		var refreshPort = int.TryParse(Environment.GetEnvironmentVariable("WP_REFRESH_PORT"), out var p) ? p : 6157;
+		_refreshListener = new RefreshListener(this, refreshPort);
+		_refreshListener.Start();
+	}
+
+	public override void Unload(bool hotReload)
+	{
+		_refreshListener?.Dispose();
+		_refreshListener = null;
+		base.Unload(hotReload);
 	}
 
 	public void OnConfigParsed(WeaponPaintsConfig config)

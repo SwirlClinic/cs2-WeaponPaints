@@ -105,8 +105,54 @@ public partial class WeaponPaints
 		}
 	}
 
+	private void OnCommandServerRefresh(CCSPlayerController? caller, CommandInfo command)
+	{
+		if (command.ArgCount < 2)
+		{
+			command.ReplyToCommand("[WeaponPaints] Usage: css_wp_refresh <steamid64>");
+			return;
+		}
+
+		var steamIdArg = command.GetArg(1);
+
+		var target = Utilities.GetPlayers()
+			.FirstOrDefault(p => p is { IsValid: true, IsBot: false, Connected: PlayerConnectedState.PlayerConnected }
+				&& p.SteamID.ToString() == steamIdArg);
+
+		if (target == null)
+		{
+			command.ReplyToCommand($"[WeaponPaints] Player with SteamID {steamIdArg} not found on server.");
+			return;
+		}
+
+		var playerInfo = new PlayerInfo
+		{
+			UserId = target.UserId,
+			Slot = target.Slot,
+			Index = (int)target.Index,
+			SteamId = target.SteamID.ToString(),
+			Name = target.PlayerName,
+			IpAddress = target.IpAddress?.Split(":")[0]
+		};
+
+		if (WeaponSync != null)
+		{
+			_ = Task.Run(async () => await WeaponSync.GetPlayerData(playerInfo));
+
+			GivePlayerGloves(target);
+			RefreshWeapons(target);
+			GivePlayerAgent(target);
+			GivePlayerMusicKit(target);
+			AddTimer(0.15f, () => GivePlayerPin(target));
+		}
+
+		command.ReplyToCommand($"[WeaponPaints] Refreshed skins for {target.PlayerName} ({steamIdArg}).");
+	}
+
 	private void RegisterCommands()
 	{
+		AddCommand("css_wp_refresh", "Force refresh a player's skins by SteamID64", OnCommandServerRefresh);
+
 		_config.Additional.CommandStattrak.ForEach(c =>
 		{
 			AddCommand($"css_{c}", "Stattrak toggle", (player, info) =>

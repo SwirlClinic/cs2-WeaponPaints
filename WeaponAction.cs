@@ -385,13 +385,6 @@ namespace WeaponPaints
 			if (pawn == null || !pawn.IsValid)
 				return;
 
-			var model = pawn.CBodyComponent?.SceneNode?.GetSkeletonInstance()?.ModelState.ModelName ?? string.Empty;
-			if (!string.IsNullOrEmpty(model))
-			{
-				pawn.SetModel("characters/models/tm_jumpsuit/tm_jumpsuit_varianta.vmdl");
-				pawn.SetModel(model);
-			}
-
 			CEconItemView item = pawn.EconGloves;
 
 			item.NetworkedDynamicAttributes.Attributes.RemoveAll();
@@ -429,7 +422,8 @@ namespace WeaponPaints
 					
 					item.Initialized = true;
 
-					SetBodygroup(pawn, "default_gloves", 1);
+					SetBodygroup(pawn, "first_or_third_person", 0);
+					AddTimer(0.2f, () => SetBodygroup(pawn, "first_or_third_person", 1), TimerFlags.STOP_ON_MAPCHANGE);
 				}
 				catch (Exception) { }
 			}, TimerFlags.STOP_ON_MAPCHANGE);

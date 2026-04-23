@@ -390,6 +390,8 @@ namespace WeaponPaints
 			item.NetworkedDynamicAttributes.Attributes.RemoveAll();
 			item.AttributeList.Attributes.RemoveAll();
 
+			//force gloves model refresh to prevent model overlap
+			player.ExecuteClientCommand("lastinv");
 			Instance.AddTimer(0.08f, () =>
 			{	
 				try
@@ -419,9 +421,11 @@ namespace WeaponPaints
 					CAttributeListSetOrAddAttributeValueByName.Invoke(item.AttributeList.Handle, "set item texture prefab", weaponInfo.Paint);
 					CAttributeListSetOrAddAttributeValueByName.Invoke(item.AttributeList.Handle, "set item texture seed", weaponInfo.Seed);
 					CAttributeListSetOrAddAttributeValueByName.Invoke(item.AttributeList.Handle, "set item texture wear", weaponInfo.Wear);
-					
-					item.Initialized = true;
 
+					item.Initialized = true;
+				
+					//force gloves model refresh to prevent model overlap
+					player.ExecuteClientCommand("lastinv");
 					SetBodygroup(pawn, "first_or_third_person", 0);
 					AddTimer(0.2f, () => SetBodygroup(pawn, "first_or_third_person", 1), TimerFlags.STOP_ON_MAPCHANGE);
 				}
